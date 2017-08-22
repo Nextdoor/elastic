@@ -184,7 +184,7 @@ type Client struct {
 //
 // An error is also returned when some configuration option is invalid or
 // the new client cannot sniff the cluster (if enabled).
-func NewClient(options ...ClientOptionFunc) (*Client, error) {
+func NewClient(ctx context.Context, options ...ClientOptionFunc) (*Client, error) {
 	// Set up the client
 	c := &Client{
 		c:                         http.DefaultClient,
@@ -229,7 +229,7 @@ func NewClient(options ...ClientOptionFunc) (*Client, error) {
 
 	if c.snifferEnabled {
 		// Sniff the cluster initially
-		if err := c.sniff(c.snifferTimeoutStartup); err != nil {
+		if err := c.sniff(ctx, c.snifferTimeoutStartup); err != nil {
 			return nil, err
 		}
 	} else {
@@ -241,7 +241,7 @@ func NewClient(options ...ClientOptionFunc) (*Client, error) {
 
 	if c.healthcheckEnabled {
 		// Perform an initial health check
-		c.healthcheck(c.healthcheckTimeoutStartup, true)
+		c.healthcheck(ctx, c.healthcheckTimeoutStartup, true)
 	}
 	// Ensure that we have at least one connection available
 	if err := c.mustActiveConn(); err != nil {
@@ -260,10 +260,10 @@ func NewClient(options ...ClientOptionFunc) (*Client, error) {
 	}
 
 	if c.snifferEnabled {
-		go c.sniffer() // periodically update cluster information
+		go c.sniffer(ctx) // periodically update cluster information
 	}
 	if c.healthcheckEnabled {
-		go c.healthchecker() // start goroutine periodically ping all nodes of the cluster
+		go c.healthchecker(ctx) // start goroutine periodically ping all nodes of the cluster
 	}
 
 	c.mu.Lock()
@@ -632,7 +632,7 @@ func (c *Client) IsRunning() bool {
 // client with NewClient; the background processes are run by default.
 //
 // If the background processes are already running, this is a no-op.
-func (c *Client) Start() {
+func (c *Client) Start(ctx context.Context) {
 	c.mu.RLock()
 	if c.running {
 		c.mu.RUnlock()
@@ -641,17 +641,17 @@ func (c *Client) Start() {
 	c.mu.RUnlock()
 
 	if c.snifferEnabled {
-		go c.sniffer()
+		go c.sniffer(ctx)
 	}
 	if c.healthcheckEnabled {
-		go c.healthchecker()
+		go c.healthchecker(ctx)
 	}
 
 	c.mu.Lock()
 	c.running = true
 	c.mu.Unlock()
 
-	c.infof("elastic: client started")
+	c.infof(ctx, "elastic: client started")
 }
 
 // Stop stops the background processes that the client is running,
@@ -659,7 +659,7 @@ func (c *Client) Start() {
 // on the nodes.
 //
 // If the background processes are not running, this is a no-op.
-func (c *Client) Stop() {
+func (c *Client) Stop(ctx context.Context) {
 	c.mu.RLock()
 	if !c.running {
 		c.mu.RUnlock()
@@ -681,52 +681,52 @@ func (c *Client) Stop() {
 	c.running = false
 	c.mu.Unlock()
 
-	c.infof("elastic: client stopped")
+	c.infof(ctx, "elastic: client stopped")
 }
 
 // errorf logs to the error log.
-func (c *Client) errorf(format string, args ...interface{}) {
+func (c *Client) errorf(ctx context.Context, format string, args ...interface{}) {
 	if c.errorlog != nil {
-		c.errorlog.Printf(format, args...)
+		c.errorlog.Printf(ctx, format, args...)
 	}
 }
 
 // infof logs informational messages.
-func (c *Client) infof(format string, args ...interface{}) {
+func (c *Client) infof(ctx context.Context, format string, args ...interface{}) {
 	if c.infolog != nil {
-		c.infolog.Printf(format, args...)
+		c.infolog.Printf(ctx, format, args...)
 	}
 }
 
 // tracef logs to the trace log.
-func (c *Client) tracef(format string, args ...interface{}) {
+func (c *Client) tracef(ctx context.Context, format string, args ...interface{}) {
 	if c.tracelog != nil {
-		c.tracelog.Printf(format, args...)
+		c.tracelog.Printf(ctx, format, args...)
 	}
 }
 
 // dumpRequest dumps the given HTTP request to the trace log.
-func (c *Client) dumpRequest(r *http.Request) {
+func (c *Client) dumpRequest(ctx context.Context, r *http.Request) {
 	if c.tracelog != nil {
 		out, err := httputil.DumpRequestOut(r, true)
 		if err == nil {
-			c.tracef("%s\n", string(out))
+			c.tracef(ctx, "%s\n", string(out))
 		}
 	}
 }
 
 // dumpResponse dumps the given HTTP response to the trace log.
-func (c *Client) dumpResponse(resp *http.Response) {
+func (c *Client) dumpResponse(ctx context.Context, resp *http.Response) {
 	if c.tracelog != nil {
 		out, err := httputil.DumpResponse(resp, true)
 		if err == nil {
-			c.tracef("%s\n", string(out))
+			c.tracef(ctx, "%s\n", string(out))
 		}
 	}
 }
 
 // sniffer periodically runs sniff.
-func (c *Client) sniffer() {
+func (c *Client) sniffer(ctx context.Context, ) {
 	c.mu.RLock()
 	timeout := c.snifferTimeout
 	interval := c.snifferInterval
@@ -742,7 +742,7 @@ func (c *Client) sniffer() {
 			c.snifferStop <- true
 			return
 		case <-ticker.C:
-			c.sniff(timeout)
+			c.sniff(ctx, timeout)
 		}
 	}
 }
@@ -752,7 +752,7 @@ func (c *Client) sniffer() {
 // by the preceding sniffing process (if sniffing is enabled).
 //
 // If sniffing is disabled, this is a no-op.
-func (c *Client) sniff(timeout time.Duration) error {
+func (c *Client) sniff(ctx context.Context, timeout time.Duration) error {
 	c.mu.RLock()
 	if !c.snifferEnabled {
 		c.mu.RUnlock()
@@ -801,7 +801,7 @@ func (c *Client) sniff(timeout time.Duration) error {
 		select {
 		case conns := <-ch:
 			if len(conns) > 0 {
-				c.updateConns(conns)
+				c.updateConns(ctx, conns)
 				return nil
 			}
 		case <-ctx.Done():
@@ -883,7 +883,7 @@ func (c *Client) extractHostname(scheme, address string) string {
 
 // updateConns updates the clients' connections with new information
 // gather by a sniff operation.
-func (c *Client) updateConns(conns []*conn) {
+func (c *Client) updateConns(ctx context.Context, conns []*conn) {
 	c.connsMu.Lock()
 
 	var newConns []*conn
@@ -903,7 +903,7 @@ func (c *Client) updateConns(conns []*conn) {
 		}
 		if !found {
 			// New connection didn't exist, so add it to our list of new conns.
-			c.infof("elastic: %s joined the cluster", conn.URL())
+			c.infof(ctx, "elastic: %s joined the cluster", conn.URL())
 			newConns = append(newConns, conn)
 		}
 	}
@@ -914,7 +914,7 @@ func (c *Client) updateConns(conns []*conn) {
 }
 
 // healthchecker periodically runs healthcheck.
-func (c *Client) healthchecker() {
+func (c *Client) healthchecker(ctx context.Context) {
 	c.mu.RLock()
 	timeout := c.healthcheckTimeout
 	interval := c.healthcheckInterval
@@ -930,7 +930,7 @@ func (c *Client) healthchecker() {
 			c.healthcheckStop <- true
 			return
 		case <-ticker.C:
-			c.healthcheck(timeout, false)
+			c.healthcheck(ctx, timeout, false)
 		}
 	}
 }
@@ -939,7 +939,7 @@ func (c *Client) healthchecker() {
 // the node state, it marks connections as dead, sets them alive etc.
 // If healthchecks are disabled and force is false, this is a no-op.
 // The timeout specifies how long to wait for a response from Elasticsearch.
-func (c *Client) healthcheck(timeout time.Duration, force bool) {
+func (c *Client) healthcheck(ctx context.Context, timeout time.Duration, force bool) {
 	c.mu.RLock()
 	if !c.healthcheckEnabled && !force {
 		c.mu.RUnlock()
@@ -968,6 +968,10 @@ func (c *Client) healthcheck(timeout time.Duration, force bool) {
 				errc <- err
 				return
 			}
+
+			// Dump request (without basic auth)
+			c.dumpRequest(ctx, (*http.Request)(req))
+
 			if basicAuth {
 				req.SetBasicAuth(basicAuthUsername, basicAuthPassword)
 			}
@@ -984,12 +988,12 @@ func (c *Client) healthcheck(timeout time.Duration, force bool) {
 		// Wait for the Goroutine (or its timeout)
 		select {
 		case <-ctx.Done(): // timeout
-			c.errorf("elastic: %s is dead", conn.URL())
+			c.errorf(ctx, "elastic: %s is dead", conn.URL())
 			conn.MarkAsDead()
 			break
 		case err := <-errc:
 			if err != nil {
-				c.errorf("elastic: %s is dead", conn.URL())
+				c.errorf(ctx, "elastic: %s is dead", conn.URL())
 				conn.MarkAsDead()
 				break
 			}
@@ -997,7 +1001,7 @@ func (c *Client) healthcheck(timeout time.Duration, force bool) {
 				conn.MarkAsAlive()
 			} else {
 				conn.MarkAsDead()
-				c.errorf("elastic: %s is dead [status=%d]", conn.URL(), status)
+				c.errorf(ctx, "elastic: %s is dead [status=%d]", conn.URL(), status)
 			}
 			break
 		}
@@ -1044,7 +1048,7 @@ func (c *Client) startupHealthcheck(timeout time.Duration) error {
 }
 
 // next returns the next available connection, or ErrNoClient.
-func (c *Client) next() (*conn, error) {
+func (c *Client) next(ctx context.Context) (*conn, error) {
 	// We do round-robin here.
 	// TODO(oe) This should be a pluggable strategy, like the Selector in the official clients.
 	c.connsMu.Lock()
@@ -1072,7 +1076,7 @@ func (c *Client) next() (*conn, error) {
 	// So we are marking them as alive--if sniffing is disabled.
 	// They'll then be picked up in the next call to PerformRequest.
 	if !c.snifferEnabled {
-		c.errorf("elastic: all %d nodes marked as dead; resurrecting them to prevent deadlock", len(c.conns))
+		c.errorf(ctx, "elastic: all %d nodes marked as dead; resurrecting them to prevent deadlock", len(c.conns))
 		for _, conn := range c.conns {
 			conn.MarkAsAlive()
 		}
@@ -1143,12 +1147,12 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 		}
 
 		// Get a connection
-		conn, err = c.next()
+		conn, err = c.next(ctx)
 		if err == ErrNoClient {
 			n++
 			if !retried {
 				// Force a healtcheck as all connections seem to be dead.
-				c.healthcheck(timeout, false)
+				c.healthcheck(ctx, timeout, false)
 			}
 			wait, ok, rerr := c.retrier.Retry(ctx, n, nil, nil, err)
 			if rerr != nil {
@@ -1158,17 +1162,18 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 				return nil, err
 			}
 			retried = true
+			c.infof(ctx, "elastic: sleep for %d ms", wait / time.Millisecond)
 			time.Sleep(wait)
 			continue // try again
 		}
 		if err != nil {
-			c.errorf("elastic: cannot get connection from pool")
+			c.errorf(ctx, "elastic: cannot get connection from pool")
 			return nil, err
 		}
 
 		req, err = NewRequest(method, conn.URL()+pathWithParams)
 		if err != nil {
-			c.errorf("elastic: cannot create request for %s %s: %v", strings.ToUpper(method), conn.URL()+pathWithParams, err)
+			c.errorf(ctx, "elastic: cannot create request for %s %s: %v", strings.ToUpper(method), conn.URL()+pathWithParams, err)
 			return nil, err
 		}
 
@@ -1180,33 +1185,38 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 		if body != nil {
 			err = req.SetBody(body, gzipEnabled)
 			if err != nil {
-				c.errorf("elastic: couldn't set body %+v for request: %v", body, err)
+				c.errorf(ctx, "elastic: couldn't set body %+v for request: %v", body, err)
 				return nil, err
 			}
 		}
 
 		// Tracing
-		c.dumpRequest((*http.Request)(req))
+		c.dumpRequest(ctx, (*http.Request)(req))
+		begin := time.Now()
 
 		// Get response
 		if ctx == nil {
 			ctx = context.Background()
 		}
 		res, err := c.c.Do((*http.Request)(req).WithContext(ctx))
+		latency := int64(time.Now().Sub(begin)/time.Millisecond)
+		c.tracef(ctx, "elastic: finished in %d ms; err: %v", latency, err)
+
 		if err == context.Canceled || err == context.DeadlineExceeded {
 			// Proceed, but don't mark the node as dead
 			return nil, err
 		}
+
 		if err != nil {
 			n++
 			wait, ok, rerr := c.retrier.Retry(ctx, n, (*http.Request)(req), res, err)
 			if rerr != nil {
-				c.errorf("elastic: %s is dead", conn.URL())
+				c.errorf(ctx, "elastic: %s is dead", conn.URL())
 				conn.MarkAsDead()
 				return nil, rerr
 			}
 			if !ok {
-				c.errorf("elastic: %s is dead", conn.URL())
+				c.errorf(ctx, "elastic: %s is dead", conn.URL())
 				conn.MarkAsDead()
 				return nil, err
 			}
@@ -1227,7 +1237,7 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 		}
 
 		// Tracing
-		c.dumpResponse(res)
+		c.dumpResponse(ctx, res)
 
 		// We successfully made a request with this connection
 		conn.MarkAsHealthy()
@@ -1241,7 +1251,7 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 	}
 
 	duration := time.Now().UTC().Sub(start)
-	c.infof("%s %s [status:%d, request:%.3fs]",
+	c.infof(ctx, "%s %s [status:%d, request:%.3fs]",
 		strings.ToUpper(method),
 		req.URL,
 		resp.StatusCode,
