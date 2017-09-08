@@ -4,10 +4,13 @@
 
 package elastic
 
-import "testing"
+import (
+	"testing"
+	"context"
+)
 
 func TestClientPlugins(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,7 +21,7 @@ func TestClientPlugins(t *testing.T) {
 }
 
 func TestClientHasPlugin(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

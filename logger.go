@@ -4,9 +4,26 @@
 
 package elastic
 
-import "context"
+import (
+	"context"
+	"log"
+)
 
 // Logger specifies the interface for all log operations.
 type Logger interface {
 	Printf(ctx context.Context, format string, v ...interface{})
+}
+
+type defaultLogger struct {
+	logger *log.Logger
+}
+
+func newDefaultLogger(logger *log.Logger) Logger {
+	return &defaultLogger{
+		logger: logger,
+	}
+}
+
+func (l *defaultLogger) Printf(ctx context.Context, format string, v ...interface{}) {
+	l.logger.Printf(format, v ...)
 }
