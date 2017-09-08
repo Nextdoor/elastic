@@ -473,7 +473,7 @@ func (w *bulkWorker) work(ctx context.Context) {
 			waitForActive := func() {
 				// Add back pressure to prevent Add calls from filling up the request queue
 				ready := make(chan struct{})
-				go w.waitForActiveConnection(ready)
+				go w.waitForActiveConnection(ctx, ready)
 				<-ready
 			}
 			if _, ok := err.(net.Error); ok {
@@ -534,7 +534,7 @@ func (w *bulkWorker) commit(ctx context.Context) error {
 	return err
 }
 
-func (w *bulkWorker) waitForActiveConnection(ready chan<- struct{}) {
+func (w *bulkWorker) waitForActiveConnection(ctx context.Context, ready chan<- struct{}) {
 	defer close(ready)
 
 	t := time.NewTicker(5 * time.Second)
@@ -542,18 +542,18 @@ func (w *bulkWorker) waitForActiveConnection(ready chan<- struct{}) {
 
 	client := w.p.c
 	stopReconnC := w.p.stopReconnC
-	w.p.c.errorf("elastic: bulk processor %q is waiting for an active connection", w.p.name)
+	w.p.c.errorf(ctx, "elastic: bulk processor %q is waiting for an active connection", w.p.name)
 
 	// loop until a health check finds at least 1 active connection or the reconnection channel is closed
 	for {
 		select {
 		case _, ok := <-stopReconnC:
 			if !ok {
-				w.p.c.errorf("elastic: bulk processor %q active connection check interrupted", w.p.name)
+				w.p.c.errorf(ctx, "elastic: bulk processor %q active connection check interrupted", w.p.name)
 				return
 			}
 		case <-t.C:
-			client.healthcheck(time.Duration(3)*time.Second, true)
+			client.healthcheck(ctx, time.Duration(3)*time.Second, true)
 			if client.mustActiveConn() == nil {
 				// found an active connection
 				// exit and signal done to the WaitGroup

@@ -146,7 +146,7 @@ func TestClientWithBasicAuth(t *testing.T) {
 }
 
 func TestClientWithBasicAuthInUserInfo(t *testing.T) {
-	client, err := NewClient(SetURL("http://user1:secret1@localhost:9200", "http://user2:secret2@localhost:9200"))
+	client, err := NewClient(context.Background(), SetURL("http://user1:secret1@localhost:9200", "http://user2:secret2@localhost:9200"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -689,7 +689,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 	client.conns[1].MarkAsHealthy()
 
 	// #1: Return 1st
-	c, err := client.next()
+	c, err := client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -697,7 +697,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[0].URL())
 	}
 	// #2: Return 2nd
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -705,7 +705,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[1].URL())
 	}
 	// #3: Return 1st
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1046,7 +1046,7 @@ func TestPerformRequestWithTracerOnError(t *testing.T) {
 	var tw bytes.Buffer
 	tout := log.New(&tw, "TRACER ", log.LstdFlags)
 
-	client, err := NewClient(SetTraceLog(tout), SetSniff(false))
+	client, err := NewClient(context.Background(), SetTraceLog(&NullContextLogger{logger:tout}), SetSniff(false))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -293,8 +293,16 @@ func NewClient(ctx context.Context, options ...ClientOptionFunc) (*Client, error
 	return c, nil
 }
 
+type NullContextLogger struct {
+	logger *log.Logger
+}
+
+func (l *NullContextLogger) Printf(ctx context.Context, fmt string, args ...interface{}) {
+	l.Printf(ctx, fmt, args...)
+}
+
 // NewClientFromConfig initializes a client from a configuration.
-func NewClientFromConfig(cfg *config.Config) (*Client, error) {
+func NewClientFromConfig(ctx context.Context, cfg *config.Config) (*Client, error) {
 	var options []ClientOptionFunc
 	if cfg != nil {
 		if cfg.URL != "" {
@@ -306,7 +314,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 				return nil, errors.Wrap(err, "unable to initialize error log")
 			}
 			l := log.New(f, "", 0)
-			options = append(options, SetErrorLog(l))
+			options = append(options, SetErrorLog(&NullContextLogger{logger: l}))
 		}
 		if cfg.Tracelog != "" {
 			f, err := os.OpenFile(cfg.Tracelog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -314,7 +322,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 				return nil, errors.Wrap(err, "unable to initialize trace log")
 			}
 			l := log.New(f, "", 0)
-			options = append(options, SetTraceLog(l))
+			options = append(options, SetTraceLog(&NullContextLogger{logger: l}))
 		}
 		if cfg.Infolog != "" {
 			f, err := os.OpenFile(cfg.Infolog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -322,7 +330,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 				return nil, errors.Wrap(err, "unable to initialize info log")
 			}
 			l := log.New(f, "", 0)
-			options = append(options, SetInfoLog(l))
+			options = append(options, SetInfoLog(&NullContextLogger{logger: l}))
 		}
 		if cfg.Username != "" || cfg.Password != "" {
 			options = append(options, SetBasicAuth(cfg.Username, cfg.Password))
@@ -331,7 +339,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 			options = append(options, SetSniff(*cfg.Sniff))
 		}
 	}
-	return NewClient(options...)
+	return NewClient(ctx, options...)
 }
 
 // NewSimpleClient creates a new short-lived Client that can be used in
@@ -1362,7 +1370,7 @@ func (c *Client) PerformRequestWithOptions(ctx context.Context, opt PerformReque
 		}
 
 		// Tracing
-		c.dumpResponse(res)
+		c.dumpResponse(ctx, res)
 
 		// Check for errors
 		if err := checkResponse((*http.Request)(req), res, opt.IgnoreErrors...); err != nil {

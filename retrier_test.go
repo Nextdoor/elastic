@@ -143,6 +143,7 @@ func TestRetrierOnPerformRequest(t *testing.T) {
 	}
 
 	client, err := NewClient(
+		context.Background(),
 		SetHttpClient(httpClient),
 		SetHealthcheck(false),
 		SetRetrier(defaultRetrier))
