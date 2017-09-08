@@ -57,6 +57,7 @@ func TestRetrier(t *testing.T) {
 	}
 
 	client, err := NewClient(
+		context.Background(),
 		SetHttpClient(httpClient),
 		SetMaxRetries(5),
 		SetHealthcheck(false),
@@ -102,6 +103,7 @@ func TestRetrierWithError(t *testing.T) {
 	}
 
 	client, err := NewClient(
+		context.Background(),
 		SetHttpClient(httpClient),
 		SetMaxRetries(5),
 		SetHealthcheck(false),
@@ -147,6 +149,7 @@ func TestRetrierOnPerformRequest(t *testing.T) {
 	}
 
 	client, err := NewClient(
+		context.Background(),
 		SetHttpClient(httpClient),
 		SetHealthcheck(false),
 		SetRetrier(defaultRetrier))

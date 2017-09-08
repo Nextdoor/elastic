@@ -10,7 +10,7 @@ import (
 )
 
 func TestNodesStats(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestNodesStatsBuildURL(t *testing.T) {
 		},
 	}
 
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

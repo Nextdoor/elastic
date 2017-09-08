@@ -117,6 +117,7 @@ type Client struct {
 	errorlog                  Logger          // error log for critical messages
 	infolog                   Logger          // information log for e.g. response times
 	tracelog                  Logger          // trace log for debugging
+	requestPreProcessor       RequestProcessor // pre-process request. e.g. customize headers
 	scheme                    string          // http or https
 	healthcheckEnabled        bool            // healthchecks enabled or disabled
 	healthcheckTimeoutStartup time.Duration   // time the healthcheck waits for a response from Elasticsearch on startup
@@ -292,8 +293,16 @@ func NewClient(ctx context.Context, options ...ClientOptionFunc) (*Client, error
 	return c, nil
 }
 
+type NullContextLogger struct {
+	logger *log.Logger
+}
+
+func (l *NullContextLogger) Printf(ctx context.Context, fmt string, args ...interface{}) {
+	l.Printf(ctx, fmt, args...)
+}
+
 // NewClientFromConfig initializes a client from a configuration.
-func NewClientFromConfig(cfg *config.Config) (*Client, error) {
+func NewClientFromConfig(ctx context.Context, cfg *config.Config) (*Client, error) {
 	var options []ClientOptionFunc
 	if cfg != nil {
 		if cfg.URL != "" {
@@ -305,7 +314,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 				return nil, errors.Wrap(err, "unable to initialize error log")
 			}
 			l := log.New(f, "", 0)
-			options = append(options, SetErrorLog(l))
+			options = append(options, SetErrorLog(&NullContextLogger{logger: l}))
 		}
 		if cfg.Tracelog != "" {
 			f, err := os.OpenFile(cfg.Tracelog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -313,7 +322,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 				return nil, errors.Wrap(err, "unable to initialize trace log")
 			}
 			l := log.New(f, "", 0)
-			options = append(options, SetTraceLog(l))
+			options = append(options, SetTraceLog(&NullContextLogger{logger: l}))
 		}
 		if cfg.Infolog != "" {
 			f, err := os.OpenFile(cfg.Infolog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -321,7 +330,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 				return nil, errors.Wrap(err, "unable to initialize info log")
 			}
 			l := log.New(f, "", 0)
-			options = append(options, SetInfoLog(l))
+			options = append(options, SetInfoLog(&NullContextLogger{logger: l}))
 		}
 		if cfg.Username != "" || cfg.Password != "" {
 			options = append(options, SetBasicAuth(cfg.Username, cfg.Password))
@@ -330,7 +339,7 @@ func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 			options = append(options, SetSniff(*cfg.Sniff))
 		}
 	}
-	return NewClient(options...)
+	return NewClient(ctx, options...)
 }
 
 // NewSimpleClient creates a new short-lived Client that can be used in
@@ -656,6 +665,15 @@ func SetTraceLog(logger Logger) ClientOptionFunc {
 	}
 }
 
+// SetRequestPreprocessor specifies the RequestProcessor to use to pre-process
+// http requests. It is nil by default.
+func SetRequestPreprocessor(processor RequestProcessor) ClientOptionFunc {
+	return func(c *Client) error {
+		c.requestPreProcessor = processor
+		return nil
+	}
+}
+
 // SetSendGetBodyAs specifies the HTTP method to use when sending a GET request
 // with a body. It is GET by default.
 func SetSendGetBodyAs(httpMethod string) ClientOptionFunc {
@@ -893,7 +911,7 @@ func (c *Client) sniffNode(ctx context.Context, url string) []*conn {
 	var nodes []*conn
 
 	// Call the Nodes Info API at /_nodes/http
-	req, err := NewRequest("GET", url+"/_nodes/http")
+	req, err := c.newRequest(ctx, "GET", url+"/_nodes/http")
 	if err != nil {
 		return nodes
 	}
@@ -1036,7 +1054,7 @@ func (c *Client) healthcheck(ctx context.Context, timeout time.Duration, force b
 		var status int
 		errc := make(chan error, 1)
 		go func(url string) {
-			req, err := NewRequest("HEAD", url)
+			req, err := c.newRequest(ctx, "HEAD", url)
 			if err != nil {
 				errc <- err
 				return
@@ -1188,6 +1206,15 @@ type PerformRequestOptions struct {
 	Retrier      Retrier
 }
 
+// newRequest creates, pre-processes and returns a new request
+func (c *Client) newRequest(ctx context.Context, method, url string) (*Request, error) {
+	req, err := NewRequest(method, url)
+	if err == nil && c.requestPreProcessor != nil {
+		c.requestPreProcessor.Process(ctx, req)
+	}
+	return req, err
+}
+
 // PerformRequest does a HTTP request to Elasticsearch.
 // It returns a response (which might be nil) and an error on failure.
 //
@@ -1253,7 +1280,7 @@ func (c *Client) PerformRequest(ctx context.Context, opt PerformRequestOptions) 
 			return nil, err
 		}
 
-		req, err = NewRequest(opt.Method, conn.URL()+pathWithParams)
+		req, err = c.newRequest(ctx, opt.Method, conn.URL()+pathWithParams)
 		if err != nil {
 			c.errorf(ctx, "elastic: cannot create request for %s %s: %v", strings.ToUpper(opt.Method), conn.URL()+pathWithParams, err)
 			return nil, err
@@ -1317,11 +1344,11 @@ func (c *Client) PerformRequest(ctx context.Context, opt PerformRequestOptions) 
 		}
 
 		// Tracing
-		c.dumpResponse(res)
+		c.dumpResponse(ctx, res)
 
 		// Log deprecation warnings as errors
 		if s := res.Header.Get("Warning"); s != "" {
-			c.errorf(s)
+			c.errorf(ctx, s)
 		}
 
 		// Check for errors

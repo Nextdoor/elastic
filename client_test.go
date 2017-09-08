@@ -35,7 +35,7 @@ func findConn(s string, slice ...*conn) (int, bool) {
 // -- NewClient --
 
 func TestClientDefaults(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestClientDefaults(t *testing.T) {
 }
 
 func TestClientWithoutURL(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestClientWithoutURL(t *testing.T) {
 }
 
 func TestClientWithSingleURL(t *testing.T) {
-	client, err := NewClient(SetURL("http://127.0.0.1:9200"))
+	client, err := NewClient(context.Background(), SetURL("http://127.0.0.1:9200"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestClientWithSingleURL(t *testing.T) {
 }
 
 func TestClientWithMultipleURLs(t *testing.T) {
-	client, err := NewClient(SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
+	client, err := NewClient(context.Background(), SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestClientWithMultipleURLs(t *testing.T) {
 }
 
 func TestClientWithBasicAuth(t *testing.T) {
-	client, err := NewClient(SetBasicAuth("user", "secret"))
+	client, err := NewClient(context.Background(), SetBasicAuth("user", "secret"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestClientWithBasicAuth(t *testing.T) {
 }
 
 func TestClientWithBasicAuthInUserInfo(t *testing.T) {
-	client, err := NewClient(SetURL("http://user1:secret1@localhost:9200", "http://user2:secret2@localhost:9200"))
+	client, err := NewClient(context.Background(), SetURL("http://user1:secret1@localhost:9200", "http://user2:secret2@localhost:9200"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestClientWithBasicAuthInUserInfo(t *testing.T) {
 }
 
 func TestClientSniffSuccess(t *testing.T) {
-	client, err := NewClient(SetURL("http://127.0.0.1:19200", "http://127.0.0.1:9200"))
+	client, err := NewClient(context.Background(), SetURL("http://127.0.0.1:19200", "http://127.0.0.1:9200"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestClientSniffSuccess(t *testing.T) {
 }
 
 func TestClientSniffFailure(t *testing.T) {
-	_, err := NewClient(SetURL("http://127.0.0.1:19200", "http://127.0.0.1:19201"))
+	_, err := NewClient(context.Background(), SetURL("http://127.0.0.1:19200", "http://127.0.0.1:19201"))
 	if err == nil {
 		t.Fatalf("expected cluster to fail with no nodes found")
 	}
@@ -186,6 +186,7 @@ func TestClientSnifferCallback(t *testing.T) {
 		return false
 	}
 	_, err := NewClient(
+		context.Background(),
 		SetURL("http://127.0.0.1:19200", "http://127.0.0.1:9200"),
 		SetSnifferCallback(cb))
 	if err == nil {
@@ -197,7 +198,7 @@ func TestClientSnifferCallback(t *testing.T) {
 }
 
 func TestClientSniffDisabled(t *testing.T) {
-	client, err := NewClient(SetSniff(false), SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
+	client, err := NewClient(context.Background(), SetSniff(false), SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +229,7 @@ func TestClientSniffDisabled(t *testing.T) {
 }
 
 func TestClientWillMarkConnectionsAsAliveWhenAllAreDead(t *testing.T) {
-	client, err := NewClient(SetURL("http://127.0.0.1:9201"),
+	client, err := NewClient(context.Background(), SetURL("http://127.0.0.1:9201"),
 		SetSniff(false), SetHealthcheck(false), SetMaxRetries(0))
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +264,7 @@ func TestClientWillMarkConnectionsAsAliveWhenAllAreDead(t *testing.T) {
 }
 
 func TestClientWithRequiredPlugins(t *testing.T) {
-	_, err := NewClient(SetRequiredPlugins("no-such-plugin"))
+	_, err := NewClient(context.Background(), SetRequiredPlugins("no-such-plugin"))
 	if err == nil {
 		t.Fatal("expected error when creating client")
 	}
@@ -274,7 +275,7 @@ func TestClientWithRequiredPlugins(t *testing.T) {
 
 func TestClientHealthcheckStartupTimeout(t *testing.T) {
 	start := time.Now()
-	_, err := NewClient(SetURL("http://localhost:9299"), SetHealthcheckTimeoutStartup(5*time.Second))
+	_, err := NewClient(context.Background(), SetURL("http://localhost:9299"), SetHealthcheckTimeoutStartup(5*time.Second))
 	duration := time.Since(start)
 	if !IsConnErr(err) {
 		t.Fatal(err)
@@ -344,7 +345,7 @@ func TestClientHealthcheckTimeoutLeak(t *testing.T) {
 		defer leaktest.CheckTimeout(t, time.Second*10)()
 	}
 
-	cli.healthcheck(time.Millisecond*500, true)
+	cli.healthcheck(context.Background(), time.Millisecond*500, true)
 
 	if isServerCloseable {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -409,7 +410,7 @@ func TestSimpleClientDefaults(t *testing.T) {
 // -- Start and stop --
 
 func TestClientStartAndStop(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,28 +421,28 @@ func TestClientStartAndStop(t *testing.T) {
 	}
 
 	// Stop
-	client.Stop()
+	client.Stop(context.Background())
 	running = client.IsRunning()
 	if running {
 		t.Fatalf("expected background processes to be stopped; got: %v", running)
 	}
 
 	// Stop again => no-op
-	client.Stop()
+	client.Stop(context.Background())
 	running = client.IsRunning()
 	if running {
 		t.Fatalf("expected background processes to be stopped; got: %v", running)
 	}
 
 	// Start
-	client.Start()
+	client.Start(context.Background())
 	running = client.IsRunning()
 	if !running {
 		t.Fatalf("expected background processes to run; got: %v", running)
 	}
 
 	// Start again => no-op
-	client.Start()
+	client.Start(context.Background())
 	running = client.IsRunning()
 	if !running {
 		t.Fatalf("expected background processes to run; got: %v", running)
@@ -449,7 +450,7 @@ func TestClientStartAndStop(t *testing.T) {
 }
 
 func TestClientStartAndStopWithSnifferAndHealthchecksDisabled(t *testing.T) {
-	client, err := NewClient(SetSniff(false), SetHealthcheck(false))
+	client, err := NewClient(context.Background(), SetSniff(false), SetHealthcheck(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,28 +461,28 @@ func TestClientStartAndStopWithSnifferAndHealthchecksDisabled(t *testing.T) {
 	}
 
 	// Stop
-	client.Stop()
+	client.Stop(context.Background())
 	running = client.IsRunning()
 	if running {
 		t.Fatalf("expected background processes to be stopped; got: %v", running)
 	}
 
 	// Stop again => no-op
-	client.Stop()
+	client.Stop(context.Background())
 	running = client.IsRunning()
 	if running {
 		t.Fatalf("expected background processes to be stopped; got: %v", running)
 	}
 
 	// Start
-	client.Start()
+	client.Start(context.Background())
 	running = client.IsRunning()
 	if !running {
 		t.Fatalf("expected background processes to run; got: %v", running)
 	}
 
 	// Start again => no-op
-	client.Start()
+	client.Start(context.Background())
 	running = client.IsRunning()
 	if !running {
 		t.Fatalf("expected background processes to run; got: %v", running)
@@ -491,7 +492,7 @@ func TestClientStartAndStopWithSnifferAndHealthchecksDisabled(t *testing.T) {
 // -- Sniffing --
 
 func TestClientSniffNode(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,14 +520,14 @@ func TestClientSniffNode(t *testing.T) {
 }
 
 func TestClientSniffOnDefaultURL(t *testing.T) {
-	client, _ := NewClient()
+	client, _ := NewClient(context.Background())
 	if client == nil {
 		t.Fatal("no client returned")
 	}
 
 	ch := make(chan error, 1)
 	go func() {
-		ch <- client.sniff(DefaultSnifferTimeoutStartup)
+		ch <- client.sniff(context.Background(), DefaultSnifferTimeoutStartup)
 	}()
 
 	select {
@@ -609,7 +610,7 @@ func TestClientSniffTimeoutLeak(t *testing.T) {
 		defer leaktest.CheckTimeout(t, time.Second*10)()
 	}
 
-	cli.sniff(time.Millisecond * 500)
+	cli.sniff(context.Background(), time.Millisecond * 500)
 
 	if isServerCloseable {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -659,7 +660,7 @@ func TestClientExtractHostname(t *testing.T) {
 		},
 	}
 
-	client, err := NewClient(SetSniff(false), SetHealthcheck(false))
+	client, err := NewClient(context.Background(), SetSniff(false), SetHealthcheck(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -675,6 +676,7 @@ func TestClientExtractHostname(t *testing.T) {
 
 func TestClientSelectConnHealthy(t *testing.T) {
 	client, err := NewClient(
+		context.Background(),
 		SetSniff(false),
 		SetHealthcheck(false),
 		SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
@@ -687,7 +689,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 	client.conns[1].MarkAsHealthy()
 
 	// #1: Return 1st
-	c, err := client.next()
+	c, err := client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -695,7 +697,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[0].URL())
 	}
 	// #2: Return 2nd
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -703,7 +705,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[1].URL())
 	}
 	// #3: Return 1st
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,6 +716,7 @@ func TestClientSelectConnHealthy(t *testing.T) {
 
 func TestClientSelectConnHealthyAndDead(t *testing.T) {
 	client, err := NewClient(
+		context.Background(),
 		SetSniff(false),
 		SetHealthcheck(false),
 		SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
@@ -726,7 +729,7 @@ func TestClientSelectConnHealthyAndDead(t *testing.T) {
 	client.conns[1].MarkAsDead()
 
 	// #1: Return 1st
-	c, err := client.next()
+	c, err := client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -734,7 +737,7 @@ func TestClientSelectConnHealthyAndDead(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[0].URL())
 	}
 	// #2: Return 1st again
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -742,7 +745,7 @@ func TestClientSelectConnHealthyAndDead(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[0].URL())
 	}
 	// #3: Return 1st again and again
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,6 +756,7 @@ func TestClientSelectConnHealthyAndDead(t *testing.T) {
 
 func TestClientSelectConnDeadAndHealthy(t *testing.T) {
 	client, err := NewClient(
+		context.Background(),
 		SetSniff(false),
 		SetHealthcheck(false),
 		SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
@@ -765,7 +769,7 @@ func TestClientSelectConnDeadAndHealthy(t *testing.T) {
 	client.conns[1].MarkAsHealthy()
 
 	// #1: Return 2nd
-	c, err := client.next()
+	c, err := client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -773,7 +777,7 @@ func TestClientSelectConnDeadAndHealthy(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[1].URL())
 	}
 	// #2: Return 2nd again
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -781,7 +785,7 @@ func TestClientSelectConnDeadAndHealthy(t *testing.T) {
 		t.Fatalf("expected %s; got: %s", c.URL(), client.conns[1].URL())
 	}
 	// #3: Return 2nd again and again
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -792,6 +796,7 @@ func TestClientSelectConnDeadAndHealthy(t *testing.T) {
 
 func TestClientSelectConnAllDead(t *testing.T) {
 	client, err := NewClient(
+		context.Background(),
 		SetSniff(false),
 		SetHealthcheck(false),
 		SetURL("http://127.0.0.1:9200", "http://127.0.0.1:9201"))
@@ -805,7 +810,7 @@ func TestClientSelectConnAllDead(t *testing.T) {
 
 	// If all connections are dead, next should make them alive again, but
 	// still return an error when it first finds out.
-	c, err := client.next()
+	c, err := client.next(context.Background())
 	if !IsConnErr(err) {
 		t.Fatal(err)
 	}
@@ -813,7 +818,7 @@ func TestClientSelectConnAllDead(t *testing.T) {
 		t.Fatalf("expected no connection; got: %v", c)
 	}
 	// Return a connection
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error; got: %v", err)
 	}
@@ -821,7 +826,7 @@ func TestClientSelectConnAllDead(t *testing.T) {
 		t.Fatalf("expected connection; got: %v", c)
 	}
 	// Return a connection
-	c, err = client.next()
+	c, err = client.next(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error; got: %v", err)
 	}
@@ -833,7 +838,7 @@ func TestClientSelectConnAllDead(t *testing.T) {
 // -- ElasticsearchVersion --
 
 func TestElasticsearchVersion(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -872,7 +877,7 @@ func TestIndexNames(t *testing.T) {
 // -- PerformRequest --
 
 func TestPerformRequest(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -923,9 +928,9 @@ func TestPerformRequestWithSimpleClient(t *testing.T) {
 
 func TestPerformRequestWithLogger(t *testing.T) {
 	var w bytes.Buffer
-	out := log.New(&w, "LOGGER ", log.LstdFlags)
+	out := newDefaultLogger(log.New(&w, "LOGGER ", log.LstdFlags))
 
-	client, err := NewClient(SetInfoLog(out), SetSniff(false))
+	client, err := NewClient(context.Background(), SetInfoLog(out), SetSniff(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -962,12 +967,12 @@ func TestPerformRequestWithLogger(t *testing.T) {
 
 func TestPerformRequestWithLoggerAndTracer(t *testing.T) {
 	var lw bytes.Buffer
-	lout := log.New(&lw, "LOGGER ", log.LstdFlags)
+	lout := newDefaultLogger(log.New(&lw, "LOGGER ", log.LstdFlags))
 
 	var tw bytes.Buffer
-	tout := log.New(&tw, "TRACER ", log.LstdFlags)
+	tout := newDefaultLogger(log.New(&tw, "TRACER ", log.LstdFlags))
 
-	client, err := NewClient(SetInfoLog(lout), SetTraceLog(tout), SetSniff(false))
+	client, err := NewClient(context.Background(), SetInfoLog(lout), SetTraceLog(tout), SetSniff(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1005,7 +1010,7 @@ func TestPerformRequestWithTracerOnError(t *testing.T) {
 	var tw bytes.Buffer
 	tout := log.New(&tw, "TRACER ", log.LstdFlags)
 
-	client, err := NewClient(SetTraceLog(tout), SetSniff(false))
+	client, err := NewClient(context.Background(), SetTraceLog(&NullContextLogger{logger:tout}), SetSniff(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1025,14 +1030,14 @@ type customLogger struct {
 	out bytes.Buffer
 }
 
-func (l *customLogger) Printf(format string, v ...interface{}) {
+func (l *customLogger) Printf(ctx context.Context, format string, v ...interface{}) {
 	l.out.WriteString(fmt.Sprintf(format, v...) + "\n")
 }
 
 func TestPerformRequestWithCustomLogger(t *testing.T) {
 	logger := &customLogger{}
 
-	client, err := NewClient(SetInfoLog(logger), SetSniff(false))
+	client, err := NewClient(context.Background(), SetInfoLog(logger), SetSniff(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1098,7 +1103,7 @@ func TestPerformRequestRetryOnHttpError(t *testing.T) {
 	tr := &failingTransport{path: "/fail", fail: fail}
 	httpClient := &http.Client{Transport: tr}
 
-	client, err := NewClient(SetHttpClient(httpClient), SetMaxRetries(5), SetHealthcheck(false))
+	client, err := NewClient(context.Background(), SetHttpClient(httpClient), SetMaxRetries(5), SetHealthcheck(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1131,7 +1136,7 @@ func TestPerformRequestNoRetryOnValidButUnsuccessfulHttpStatus(t *testing.T) {
 	tr := &failingTransport{path: "/fail", fail: fail}
 	httpClient := &http.Client{Transport: tr}
 
-	client, err := NewClient(SetHttpClient(httpClient), SetMaxRetries(5), SetHealthcheck(false))
+	client, err := NewClient(context.Background(), SetHttpClient(httpClient), SetMaxRetries(5), SetHealthcheck(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1164,7 +1169,7 @@ func (fb failingBody) MarshalJSON() ([]byte, error) {
 }
 
 func TestPerformRequestWithSetBodyError(t *testing.T) {
-	client, err := NewClient()
+	client, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1294,7 +1299,7 @@ func TestPerformRequestWithCompressionDisabled(t *testing.T) {
 }
 
 func testPerformRequestWithCompression(t *testing.T, hc *http.Client) {
-	client, err := NewClient(SetHttpClient(hc), SetSniff(false))
+	client, err := NewClient(context.Background(), SetHttpClient(hc), SetSniff(false))
 	if err != nil {
 		t.Fatal(err)
 	}
