@@ -3,6 +3,7 @@ package elastic
 import (
 	"encoding/json"
 	"testing"
+	"context"
 )
 
 func TestReindexer(t *testing.T) {
@@ -155,7 +156,7 @@ func TestReindexerProgress(t *testing.T) {
 
 func TestReindexerWithTargetClient(t *testing.T) {
 	sourceClient := setupTestClientAndCreateIndexAndAddDocs(t)
-	targetClient, err := NewClient()
+	targetClient, err := NewClient(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

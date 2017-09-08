@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"time"
+	"context"
 )
 
 const (
@@ -130,7 +131,7 @@ type logger interface {
 func setupTestClient(t logger, options ...ClientOptionFunc) (client *Client) {
 	var err error
 
-	client, err = NewClient(options...)
+	client, err = NewClient(context.Background(), options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func setupTestClientAndCreateIndex(t logger, options ...ClientOptionFunc) *Clien
 }
 
 func setupTestClientAndCreateIndexAndLog(t logger, options ...ClientOptionFunc) *Client {
-	return setupTestClientAndCreateIndex(t, SetTraceLog(log.New(os.Stdout, "", 0)))
+	return setupTestClientAndCreateIndex(t, SetTraceLog(newDefaultLogger(log.New(os.Stdout, "", 0))))
 }
 
 func setupTestClientAndCreateIndexAndAddDocs(t logger, options ...ClientOptionFunc) *Client {
