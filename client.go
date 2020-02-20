@@ -736,7 +736,7 @@ func (c *Client) dumpResponse(ctx context.Context, resp *http.Response) {
 }
 
 // sniffer periodically runs sniff.
-func (c *Client) sniffer(ctx context.Context, ) {
+func (c *Client) sniffer(ctx context.Context) {
 	c.mu.RLock()
 	timeout := c.snifferTimeout
 	interval := c.snifferInterval
@@ -1181,7 +1181,7 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 				return nil, err
 			}
 			retried = true
-			c.infof(ctx, "elastic: sleep for %d ms", wait / time.Millisecond)
+			c.infof(ctx, "elastic: sleep for %d ms", wait/time.Millisecond)
 			time.Sleep(wait)
 			continue // try again
 		}
@@ -1218,12 +1218,20 @@ func (c *Client) PerformRequestC(ctx context.Context, method, path string, param
 			ctx = context.Background()
 		}
 		res, err := c.c.Do((*http.Request)(req).WithContext(ctx))
-		latency := int64(time.Now().Sub(begin)/time.Millisecond)
+		latency := int64(time.Now().Sub(begin) / time.Millisecond)
 		c.tracef(ctx, "elastic: finished in %d ms; err: %v", latency, err)
 
 		if err == context.Canceled || err == context.DeadlineExceeded {
 			// Proceed, but don't mark the node as dead
 			return nil, err
+		}
+
+		if ue, ok := err.(*url.Error); ok {
+			// This happens e.g. on redirect errors, see https://golang.org/src/net/http/client_test.go#L329
+			if ue.Err == context.Canceled || ue.Err == context.DeadlineExceeded || ue.Temporary() {
+				// Proceed, but don't mark the node as dead
+				return nil, err
+			}
 		}
 
 		if err != nil {
